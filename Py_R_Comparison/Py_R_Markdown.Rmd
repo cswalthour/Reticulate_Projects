@@ -35,8 +35,6 @@ reticulate::py_config()
 
 ```{r, include = T, warning=F, error=F}
 
-setwd("C:/Users/cswal/Documents/Github/career_models/")
-
 # Read-in sample purchase order data
 tbl_data <- read.csv(file.choose()) %>%
   dplyr::select(-c(X))
