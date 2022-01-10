@@ -1,0 +1,59 @@
+---
+title: "Python & R Comparison"
+author: "Chris Walthour"
+date: "1/4/2022"
+output:
+  html_document:
+    toc: yes
+    toc_float: yes
+  pdf_document:
+    toc: yes
+---
+
+## Set-up Python Environment
+
+```{r, include = T,  message = F, warning=F}
+
+# Set environmental variable to locate virtual Python
+#Sys.setenv(RETICULATE_PYTHON = "C:/Users/cswal/Documents/Github/career_models/my_env/Scripts")
+
+# Load libraries
+lapply(c("reticulate", "dplyr","purrr", "tibble", "bigrquery", "DBI",
+         "stringr", "tidyr", "lubridate", "taskscheduleR",
+         "Metrics", "zoo"), function(x){
+  require(x, character.only = T)})
+
+# Initiate config of Python environment
+reticulate::py_config()
+
+# Will verify whether Python module exists within environ
+#reticulate::py_module_available("pandas")
+
+```
+
+
+
+```{r, include = T, warning=F, error=F}
+
+setwd("C:/Users/cswal/Documents/Github/career_models/")
+
+# Read-in sample purchase order data
+tbl_data <- read.csv(file.choose()) %>%
+  dplyr::select(-c(X))
+
+
+```
+
+```{python, include = T, warning=F, error=F}
+
+# Load pandas
+import pandas as pd
+
+# Pass tibble to Python and register as pandas dataframe
+df_test = r.tbl_data
+
+# Inspect structure of new pandas dataframe
+print(df_test.info())
+
+```
+
