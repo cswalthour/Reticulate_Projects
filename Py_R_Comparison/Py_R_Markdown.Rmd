@@ -33,12 +33,75 @@ reticulate::py_config()
 
 
 
-```{r, include = T, warning=F, error=F}
+```{r, echo = F, warning=F, error=F}
 
 # Read-in sample purchase order data
 tbl_data <- read.csv(file.choose()) %>%
   dplyr::select(-c(X))
 
+# Performing qualifying PO operations on vendor relationship
+tbl_data_cleansed <- tbl_data %>%
+  arrange(vendor_number, sub_group, ship_point, source_type, po_number, skitem, 
+          skclnt, po_number, receipt_date) %>%
+  group_by(vendor_number, sub_group, ship_point, source_type) %>%
+  nest() %>% ungroup() %>%
+  mutate(data = map2(data, paste0(vendor_number, "-", sub_group, "-", ship_point, "-", source_type), function(x, y){
+    
+    #example <- list(9283, "", "PA", "SOURCE A - IN SCOPE")
+    
+    #x <- tbl_data_cleansed$data[tbl_data_cleansed$vendor_number == example[1][[1]] &
+                                  #tbl_data_cleansed$sub_group == example[2][[1]] &
+                                  #tbl_data_cleansed$ship_point == example[3][[1]] &
+                                  #tbl_data_cleansed$source_type == example[4][[1]]][[1]]
+    
+    print(paste0("Evaluating lead-time relationship: ", y))
+    
+    tbl_po <- x %>% group_by(po_number, skitem, skclnt) %>% 
+      nest() %>% ungroup() %>%
+      mutate(data = map2(data, paste0(po_number, "-", skitem, "-", skclnt), function(x, y){
+        
+        #example_po <- list(372842, 4253464, '064D')
+        
+        #x <- tbl_po$data[tbl_po$po_number == example_po[1][[1]] &
+                           #tbl_po$skitem == example_po[2][[1]] &
+                           #tbl_po$skclnt == example_po[3][[1]]][[1]]
+        
+        print(paste0("Evaluating po-sku: ", y))
+        
+        tbl_temp <- x %>%
+          mutate(receipt_qty_cum = cumsum(total_receipt_qty)) %>%
+          mutate(perc_comp = round(receipt_qty_cum/order_qty, 2)) %>%
+          mutate(qualified = ifelse(perc_comp >= 0.8, "yes", "no")) %>%
+          mutate(qualified_final = ifelse(lag(qualified, 1) == "yes", "no", qualified)) %>%
+          mutate(qualified_final = case_when(
+            
+            is.na(qualified_final)==TRUE & perc_comp >= 0.8 ~ 'yes',
+            is.na(qualified_final)==TRUE & perc_comp < 0.8 ~ 'no',
+            TRUE ~ as.character(qualified_final)
+            
+          ))
+        
+        tbl_final <- tbl_temp %>%
+          filter(qualified_final == "yes") %>%
+          dplyr::select(-c(receipt_qty_cum, perc_comp, qualified, qualified_final)) %>%
+          bind_cols(., tibble(todate_receipt_qty = max(tbl_temp$receipt_qty_cum))) %>%
+          dplyr::relocate(todate_receipt_qty, .before = "purchasing_team")
+        
+        return(tbl_final)
+        
+      })) %>% unnest()
+    
+    return(tbl_po)
+    
+  })) %>% unnest()
+
+# Inspect differences between cumulative receipt qty and qualified po receipt qty
+tbl_temp <- tbl_data_cleansed %>%
+  dplyr::select(vendor_number, sub_group, ship_point, source_type, po_number, skitem,
+                skclnt, order_date, order_qty, receipt_date, total_receipt_qty, todate_receipt_qty) %>%
+  arrange(vendor_number, sub_group, ship_point, source_type, skitem, skclnt) %>%
+  mutate(check = total_receipt_qty != todate_receipt_qty) %>%
+  filter(check == TRUE)
 
 ```
 
@@ -48,10 +111,103 @@ tbl_data <- read.csv(file.choose()) %>%
 import pandas as pd
 
 # Pass tibble to Python and register as pandas dataframe
-df_test = r.tbl_data
+df_po_history = r.tbl_data
 
 # Inspect structure of new pandas dataframe
-print(df_test.info())
+print(df_po_history.info())
 
 ```
+
+```{python, include = T, warning=F, error=F}
+
+# Sort historical po and forecast data 
+df_po_history.sort_values(by=['po_number','sku', 'receipt_date'], inplace=True)
+
+# Reset index after sorting (won't be permitted as additional dot-string operation above)
+df_po_history.reset_index(drop=True, inplace=True)
+
+# Impute those features with NA
+df_po_history = df_po_history.fillna('')
+
+# Groupby df operation
+df_po_history_grouped = df_po_history.groupby(['vendor_number', 'ship_point', 'sub_group', 'source_type'], dropna=False)
+
+```
+
+```{python, include = T, warning=F, error=F}
+
+# Create function to determine po completion percentage by sku
+def po_completion(x):
+  # Sort object and perform groupby 
+  po_groupdf = x.sort_values(['sku','po_number','receipt_date'])
+  
+  # Sort object and perform groupby 
+  po_groupdf = po_groupdf.groupby(['sku', 'po_number'])
+  
+  # Define function that will compute availability percentage by grouping
+  def avail_perc(x):
+    return pd.DataFrame({'avail_perc': x['total_receipt_qty']/ x['order_qty']})
+  
+  # Apply function to groupby dataframe to produce dataframe object
+  availability = po_groupdf.apply(avail_perc)
+  
+  # Convert to dataframe
+  po_groupdf = po_groupdf.obj
+  
+  # Join dataframes together to include newly calculated feature
+  po_groupdf_2 = pd.merge(po_groupdf, availability, left_index=True, right_index=True)
+  
+  # Determine cumulative receipt percentage by sku-po number 
+  po_groupdf_2['cum_perc'] = po_groupdf_2.groupby(['po_number', 'sku'])['avail_perc'].cumsum()
+  
+  # Determine whether receipt date exceeded 80% fulfillment
+  po_groupdf_2['above_thresh'] = po_groupdf_2['avail_perc'].apply(lambda x: 'yes' if x >= 0.8 else 'no')
+  
+  # Shifting previous row record to current row
+  po_groupdf_2['lag'] = po_groupdf_2.groupby(['po_number', 'sku'])['above_thresh'].shift(1)
+  
+  # Imputing those records under "lag" feature noted as NA with "no"
+  po_groupdf_2['lag'] = po_groupdf_2['lag'].fillna('no')
+  
+  # Define function that detects records of certain features
+  def qualify(var):
+    if var['above_thresh'] == 'yes' and var['lag'] == 'no':
+      return 'yes'
+    else:
+      return 'no'
+  
+  # Applying qualify function according to grouped dataframe
+  po_groupdf_2['qualify'] = po_groupdf_2.apply(lambda var: qualify(var), axis = 1)
+  
+  # Filter dataframe based on those po's that qualify
+  po_groupdf_2 = po_groupdf_2[po_groupdf_2['qualify'] == 'yes']
+  
+  return(po_groupdf_2)
+
+```
+
+
+```{python, include = T, warning=F, error=F}
+
+df_po_history_cleansed = df_po_history_grouped.apply(lambda x: po_completion(x))
+
+```
+
+
+```{r, include = T, warning=F, error=F}
+
+# Read-in sample purchase order data
+tbl_data_py <- py$df_po_history_cleansed
+
+# Determine which records were removed during python processing
+tbl_diff <- tbl_data_cleansed %>%
+  dplyr::select(c(vendor_number, ship_point, sub_group, source_type, po_number, skitem, skclnt, 
+                  order_date, order_qty, receipt_date, todate_receipt_qty, 
+                  actual_leadtime)) %>%
+  anti_join(tbl_data_py %>%
+              dplyr::select(c(vendor_number, ship_point, sub_group, source_type, po_number, skitem, skclnt, 
+                  order_date, receipt_date)))
+
+```
+
 

@@ -1,0 +1,52 @@
+---
+title: "UC Advanced Python"
+author: "Chris Walthour"
+date: "1/11/2022"
+output: html_document
+---
+
+```{r, include = T,  message = F, warning=F}
+
+# Set environmental variable to locate virtual Python
+#Sys.setenv(RETICULATE_PYTHON = "C:/Users/cswal/Documents/Github/career_models/my_env/Scripts")
+
+# Load libraries
+lapply(c("reticulate", "dplyr","purrr", "tibble", "bigrquery", "DBI",
+         "stringr", "tidyr", "lubridate", "taskscheduleR",
+         "Metrics", "zoo"), function(x){
+  require(x, character.only = T)})
+
+# Initiate config of Python environment
+reticulate::py_config()
+
+# Will verify whether Python module exists within environ
+#reticulate::py_module_available("pandas")
+
+```
+
+```{python, include = T, warning=F, error=F}
+
+# Load pandas
+import pandas as pd
+
+adult_census = pd.read_csv("C:/Users/cswal/Documents/Github/advanced-python-datasci/data/adult-census.csv")
+
+import numpy as np
+
+# create column names of interest
+target_col = "class"
+feature_col = adult_census.drop(columns=target_col).select_dtypes(np.number).columns.values
+
+target = adult_census[target_col]
+target
+
+features = adult_census[feature_col]
+features
+
+print(f"The dataset contains {features.shape[0]} samples and "f"{features.shape[1]} features")
+
+```
+
+
+
+
