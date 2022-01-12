@@ -79,13 +79,17 @@ tbl_data_cleansed <- tbl_data %>%
             is.na(qualified_final)==TRUE & perc_comp < 0.8 ~ 'no',
             TRUE ~ as.character(qualified_final)
             
-          ))
+          )) %>% mutate(receipt_count = 1) %>%
+          mutate(total_receipt_count = cumsum(receipt_count)) %>%
+          mutate(total_receipt_count = length(.$total_receipt_count)) %>%
+          mutate(receipt_count = cumsum(receipt_count))
         
         tbl_final <- tbl_temp %>%
           filter(qualified_final == "yes") %>%
           dplyr::select(-c(receipt_qty_cum, perc_comp, qualified, qualified_final)) %>%
           bind_cols(., tibble(todate_receipt_qty = max(tbl_temp$receipt_qty_cum))) %>%
-          dplyr::relocate(todate_receipt_qty, .before = "purchasing_team")
+          dplyr::relocate(c(todate_receipt_qty, receipt_count,
+                            total_receipt_count), .before = "purchasing_team")
         
         return(tbl_final)
         
@@ -202,8 +206,8 @@ tbl_data_py <- py$df_po_history_cleansed
 # Determine which records were removed during python processing
 tbl_diff <- tbl_data_cleansed %>%
   dplyr::select(c(vendor_number, ship_point, sub_group, source_type, po_number, skitem, skclnt, 
-                  order_date, order_qty, receipt_date, todate_receipt_qty, 
-                  actual_leadtime)) %>%
+                  order_date, order_qty, receipt_date, todate_receipt_qty, receipt_count, 
+                  total_receipt_count, actual_leadtime)) %>%
   anti_join(tbl_data_py %>%
               dplyr::select(c(vendor_number, ship_point, sub_group, source_type, po_number, skitem, skclnt, 
                   order_date, receipt_date)))
