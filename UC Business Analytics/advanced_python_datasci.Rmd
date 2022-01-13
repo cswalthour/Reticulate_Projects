@@ -24,6 +24,8 @@ reticulate::py_config()
 
 ```
 
+Classroom work as of Tue, 1/11/22
+
 ```{python, include = T, warning=F, error=F}
 
 # Load pandas
@@ -47,6 +49,16 @@ print(f"The dataset contains {features.shape[0]} samples and "f"{features.shape[
 
 ```
 
+Classroom work as of Tue, 1/13/22
 
+```{python, include = T, warning=F, error=F}
+
+import my_module
+
+features, target = my_module.get_features_and_target(
+  'C:/Users/cswal/Documents/Github/Reticulate_Projects/UC Business Analytics/adult-census.csv',
+  'class')
+
+```
 
 

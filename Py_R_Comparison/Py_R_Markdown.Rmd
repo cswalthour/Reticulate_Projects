@@ -136,12 +136,19 @@ df_po_history = df_po_history.fillna('')
 # Groupby df operation
 df_po_history_grouped = df_po_history.groupby(['vendor_number', 'ship_point', 'sub_group', 'source_type'], dropna=False)
 
+# Example group to experiment with with multiple receipts
+test_group = df_po_history_grouped.get_group((2626, '', '', 'SOURCE A - OUT OF SCOPE'))
+
 ```
 
 ```{python, include = T, warning=F, error=F}
 
 # Create function to determine po completion percentage by sku
 def po_completion(x):
+  
+  # Example group (from above) to pass-through
+  #x = test_group
+  
   # Sort object and perform groupby 
   po_groupdf = x.sort_values(['sku','po_number','receipt_date'])
   
