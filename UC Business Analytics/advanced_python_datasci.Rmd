@@ -54,11 +54,126 @@ Classroom work as of Tue, 1/13/22
 ```{python, include = T, warning=F, error=F}
 
 import my_module
+import sklearn
 
 features, target = my_module.get_features_and_target(
   'C:/Users/cswal/Documents/Github/Reticulate_Projects/UC Business Analytics/adult-census.csv',
   'class')
+  
+from sklearn.model_selection import train_test_split
 
+x_train, x_test, y_train, y_test = train_test_split(
+  features,
+  target, 
+  random_state=123,
+  train_size=.75,
+  stratify=target)
+
+# to display nice model diagram
+from sklearn import set_config
+set_config(display='diagram')
+
+# import data
+adult_census = pd.read_csv('C:/Users/cswal/Documents/Github/Reticulate_Projects/UC Business Analytics/adult-census.csv')
+
+# separate feature & target data
+target = adult_census['class']
+features = adult_census.drop(columns='class')
+
+from sklearn.compose import make_column_selector as selector
+
+# create selector object based on data type
+numerical_columns_selector = selector(dtype_exclude=object)
+categorical_columns_selector = selector(dtype_include=object)
+
+# get columns of interest
+numerical_columns = numerical_columns_selector(features)
+categorical_columns = categorical_columns_selector(features)
+
+# results in a list containing relevant column names
+numerical_columns
+
+# Preprocessing
+numerical_features = features[numerical_columns]
+numerical_features.describe()
+
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import MinMaxScaler
+
+scaler = StandardScaler()
+scaler.fit(numerical_features)
+
+mm_scaler = MinMaxScaler()
+mm_scaler.fit(numerical_features)
+
+numerical_features_scaled = scaler.transform(numerical_features)
+numerical_features_scaled
+
+numerical_features_mmscaled = mm_scaler.transform(numerical_features)
+
+# fitting and transforming in one step
+scaler.fit_transform(numerical_features)
+
+numerical_features = pd.DataFrame(
+    numerical_features_scaled,
+    columns=numerical_columns
+)
+
+numerical_features.describe()
+
+numerical_features_mm = pd.DataFrame(
+    numerical_features_mmscaled,
+    columns=numerical_columns
+)
+
+numerical_features_mm.describe()
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.pipeline import make_pipeline
+
+model = make_pipeline(StandardScaler(), LogisticRegression())
+model
+
+# split our data into train & test
+X_train, X_test, y_train, y_test = train_test_split(numerical_features, target, random_state=123)
+
+# fit our pipeline model
+model.fit(X_train, y_train)
+
+# score our model on the test data
+model.score(X_test, y_test)
+
+from sklearn.preprocessing import OrdinalEncoder
+
+# let's illustrate with the 'education' feature
+education_column = features[["education"]]
+
+ed_levels = [' Preschool', ' 1st-4th', ' 5th-6th', ' 7th-8th', ' 9th', ' 10th', ' 11th', 
+             ' 12th', ' HS-grad', ' Prof-school', ' Some-college', ' Assoc-acdm', 
+             ' Assoc-voc', ' Bachelors', ' Masters', ' Doctorate']
+
+encoder = OrdinalEncoder(categories=[ed_levels])
+education_encoded = encoder.fit_transform(education_column)
+education_encoded
+
+from sklearn.preprocessing import OneHotEncoder
+
+encoder = OneHotEncoder(sparse=False)
+education_encoded = encoder.fit_transform(education_column)
+education_encoded
+
+# let's illustrate with the 'occupation' feature
+occupation_column = features[["occupation"]]
+
+# get all categorical features
+categorical_features = features[categorical_columns]
+
+# one-hot encode all features
+categorical_features_encoded = encoder.fit_transform(categorical_features)
+
+# view as a data frame
+columns_encoded = encoder.get_feature_names(categorical_features.columns)
+pd.DataFrame(categorical_features_encoded, columns=columns_encoded).head()
 ```
 
 
